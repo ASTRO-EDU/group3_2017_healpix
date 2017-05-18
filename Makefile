@@ -15,7 +15,7 @@
 #	* uninstall: add or remove the files and directories that should be uninstalled
 #############################################################################
 
-PROJECT= agileprojectname
+PROJECT= healpixGammaEventProject
 SHELL = /bin/sh
 
 ####### 1) Project names and system
@@ -25,7 +25,7 @@ SYSTEM= $(shell gcc -dumpmachine)
 LINKERENV= cfitsio, pil, wcs, agile, opencv
 
 # Applications
-AG_EXE = AG_exename
+AG_EXE = healpix_map_maker
 
 # Libraries
 AGILE_MAP = AgileMap
