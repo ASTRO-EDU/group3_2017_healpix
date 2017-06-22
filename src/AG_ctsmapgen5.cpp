@@ -62,7 +62,6 @@ int main(int argc, char *argv[])
     PilParams params(paramsDescr);
     if (!params.Load(argc, argv))
         return EXIT_FAILURE;
-
     Intervals intervals;
     double tmin = params["tmin"];
     double tmax = params["tmax"];
@@ -96,6 +95,7 @@ int main(int argc, char *argv[])
     //fovradmax=60
     //phasecode=6
     //filtercode=0 (tutto) o 5 (solo fotoni gamma)
+    cout<<"asda"<<endl;
     string evtExpr = selection::EvtExprString(intervals, params["emin"], params["emax"],
                                     params["albrad"], params["fovradmax"], params["fovradmin"],
                                     params["phasecode"], params["filtercode"]);
@@ -113,8 +113,8 @@ int main(int argc, char *argv[])
     vector< vector<int> > counts;
     //outfile nome del file di output
 
-    status = EvalCountsHealpix(params["outfile"], params["tmin"],
-                       params["tmax"], params["mdim"], params["mres"],
+    status = EvalCountsHealpix(params["outfile"],params["mres"], params["tmin"],
+                       params["tmax"], params["mdim"],
                        params["la"], params["ba"], params["lonpole"],
                        params["emin"], params["emax"], params["fovradmax"],
                        params["fovradmin"], params["albrad"], params["phasecode"],

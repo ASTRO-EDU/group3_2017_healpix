@@ -22,7 +22,7 @@ SHELL = /bin/sh
 
 SYSTEM= $(shell gcc -dumpmachine)
 #ice, ctarta, mpi, cfitsio
-LINKERENV= cfitsio, pil, wcs, agile, opencv
+LINKERENV= cfitsio, pil, wcs, agile, opencv, healpix
 
 # Applications
 AG_EXE = healpix_map_maker
@@ -125,7 +125,13 @@ ifneq (, $(findstring cfitsio, $(LINKERENV)))
     CXXFLAGS += -I$(CFITSIO)/include
     LIBS += -L$(CFITSIO)/lib -lcfitsio
 endif
-
+ifneq (, $(findstring healpix, $(LINKERENV)))
+    ifeq (,$(findstring -I $(HEALPIX)/include, $(CXXFLAGS)))
+        CXXFLAGS += -I $(HEALPIX)/include
+    endif
+    LIBS += -L$(HEALPIX)/lib -lhealpix_cxx -lsharp -lfftpack -lcxxsupport -lc_utils
+endif
+ 
 LINK     = $(CXX)
 #for link
 LFLAGS = -shared -Wl,-soname,$(TARGET1) -Wl,-rpath,$(DESTDIR)
