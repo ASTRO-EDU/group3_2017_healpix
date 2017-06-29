@@ -19,6 +19,7 @@
 #include <opencv/highgui.h>
 
 #define DEBUG 1
+#define MAX_NEIGHBOORS 10
 using namespace std;
 
 
@@ -27,7 +28,7 @@ int EvalCountsHealpix(const char *outfile, double mres, double tmin,
                double lonpole, double emin, double emax, double fovradmax,
                double fovradmin, double albrad, int phasecode, int filtercode,
                const char *selectionFilename,  const char *templateFilename,
-               Intervals &intervals, vector< vector<int> > &counts, bool saveMaps)
+               Intervals &intervals, vector< vector<int> > &counts, bool saveMaps,bool smooth, bool binarize)
 {
     int status = 0;
 
@@ -79,7 +80,6 @@ int EvalCountsHealpix(const char *outfile, double mres, double tmin,
     cout<<"mres= "<<mres<<endl;
     int Nside = pow(2,mres);
     Healpix_Map<int> map((int)mres,NEST); // NEST is chosen for seek of efficency
-    //int mapArray[786432];
  	for(int i=0;i<12*pow(Nside,2);i++){ //initialize the healpix map to all zeros
 		map[i]=0;
 	}
@@ -95,7 +95,7 @@ int EvalCountsHealpix(const char *outfile, double mres, double tmin,
 #endif
         fits_select_rows(selectionFits, templateFits, (char*)selExpr.c_str(), &status);
 #ifdef DEBUG
-        //cout << "Rows from " << tempFilename << " selected" << endl;
+      //  cout << "Rows from " << tempFilename << " selected" << endl;
 #endif
         long nrows;
         fits_get_num_rows(templateFits, &nrows, &status);
@@ -115,60 +115,12 @@ int EvalCountsHealpix(const char *outfile, double mres, double tmin,
             Euler(ra, dec, &l, &b, 1);
             l *= DEG2RAD;
             b *= DEG2RAD;
-				//std::cout<<"l= "<<l<<std::endl;
-				//	std::cout<<"b= "<<b<<std::endl;
 
-			//std::cout<<"map_order= "<<map.Order()<<std::endl;
-		//	std::cout<<"nPix= "<<map.Npix()<<std::endl;
-
-			/*for(int i=0;i<13;i++){
-				std::cout<<"map["<<i<<"](prev)=\t"<<map[i]<<std::endl;
-			}*/
 			pointing point = pointing((M_PI/2)-b,l); // Encodes an angular position on unitary sphere as colatitude and longitude
 			int index = map.ang2pix(point);
 			//std::cout<<"i: \t"<<index<<std::endl;
 			map[index]++;
-			//mapArray[index]++;
-		/*	for(int i=0;i<12;i++){
-				std::cout<<"map["<<i<<"](next)=\t"<<map[i]<<std::endl;
-			}*/
-            //abbiamo (l,b) in coordinate galattiche
-            //da qui va a determinare quale è il pixel a cui l'evento gamma appartiene (e.g. il fotone)
 
-          /*  the = sin(b)*sin(baa)+cos(b)*cos(baa)*cos(l-laa);
-            if (the < -1.0)
-                the = M_PI;
-            else if (the > 1.0)
-                the = 0.0;
-            else
-                the = acos(the);
-
-            if (proj == ARC) {
-                x = RAD2DEG/Sinaa(the) * cos(b)*sin(l-laa);
-                y = RAD2DEG/Sinaa(the) * (sin(b)*cos(baa) - cos(b)*sin(baa)*cos(l-laa));
-
-                i = (int)floor(((-x+(mdim/2.))/mres));
-                ii = (int)floor(((y+(mdim/2.))/mres));
-            }
-            else if (proj == AIT) {
-                l=l-laa;
-
-                if (l < M_PI)
-                l=-l;
-                else
-                l=2*M_PI -l;
-
-                x=RAD2DEG*(sqrt(2.0)*2.0*cos(b)*sin(l/2.0))/sqrt(1.0 + cos(b)*cos(l/2.0) );
-                y=RAD2DEG*(sqrt(2.0)*sin(b))/sqrt(1.0 + cos(b)*cos(l/2.0) );
-
-                i=(int)floor(((x+(mdim/2.))/mres));
-                ii=(int)floor(((y+(mdim/2.))/mres));
-            }*/
-
-           /* if (inmap(i, ii, mxdim)) {
-                counts[intvIndex][ii*mxdim+i]++;
-                totalCounts++;
-            }*/
         }
         if (nrows > 0)
             fits_delete_rows(templateFits, 1, nrows, &status);
@@ -187,256 +139,281 @@ int EvalCountsHealpix(const char *outfile, double mres, double tmin,
 #ifdef DEBUG
 	cout<<"max = "<< max<<endl;
 #endif
-	float data[nPix];
-	for(int i=0;i<nPix;i++){
-		data[i] = ((float)map[i]*255.0)/(float)max;
-	}
-	float convolved_data[nPix];
-	Healpix_Map<float> convolved_map((int)mres,NEST);
-	float kernel_side = 9.0;
-
-	float k_1= 0.150342;
-	/*float kernel[8] = { 0.077847,	0.123317,	0.077847,
-				0.123317,	0.123317,
-				0.077847,	0.123317,	0.077847};
-				*/
-	/*float kernel_reordered[8]={	0.059912,0.094907,0.059912,0.094907,0.059912,0.094907,0.059912,	0.094907};
-	float kernel_reordered_2[16]={0.023528,0.033969,0.038393,0.033969,0.023528,0.033969,0.038393,0.033969,0.023528,0.033969,0.038393,0.033969,0.023528,0.033969,0.038393,0.033969};
-	*/
-
-
-	/*sigma = 1.5 side=9*/
-	float kernel_reordered[8]={0.044672,0.055338,0.044672,0.055338,0.044672,0.055338,0.044672,0.055338};
-	float kernel_reordered_2[16]={0.012358,	0.023496,0.029106,0.023496,0.012358,0.023496,0.029106,0.023496,0.012358,0.023496,0.029106,0.023496,0.012358,0.023496,0.029106,0.023496};
-	float kernel_reordered_3[24]={0.00145,0.004233,0.008048,0.00997,0.008048,0.004233,0.00145,0.004233,0.008048,0.00997,0.008048,0.004233,0.00145,0.004233,0.008048,0.00997,0.008048,0.004233,0.00145,0.004233,0.008048,0.00997,0.008048,0.004233};
-	float kernel_reordered_4[32]={0.000072,0.000323,0.000944,0.001794,0.002222,0.001794,0.000944,0.000323,0.000072,0.000323,0.000944,0.001794,0.002222,0.001794,0.000944,0.000323,0.,.000323,0.000944,0.001794,0.002222,0.001794,0.000944,0.000323,0.000072,0.000323,0.000944,0.001794,0.002222,0.001794,0.000944,0.000323};
-	/*float kernel_reordered2[24]={};*/
-
-
-	fix_arr<int,81> arr[10];
-	fix_arr<int,8> tempA;
-	int temp;
-	for(int i=0;i<nPix;i++){
-		temp=0;
-		temp +=map[i]*k_1;
-		map.neighbors(i,tempA);//extract the 8-neighborood of the i-th pixel
-		for(int j=0;j<8;j++){
-			arr[0][j]=tempA[j];
+Healpix_Map<float> convolved_map((int)mres,NEST);
+float convolved_data[nPix];
+	if(smooth){
+		float data[nPix];
+		for(int i=0;i<nPix;i++){
+			data[i] = ((float)map[i]*255.0)/(float)max;
 		}
-		int z = 0;
-		int separator;
-		int lim = (kernel_side/2.0)-1;
-		//cout<<"lim="<<lim<<endl;
-		for(int times=0;times<lim;times++){ //if necessary extract the other neighbors
-			//cout<<"times="<<times<<endl;
-			separator = 2*(times+1);
-			//cout<<"separator="<<separator<<endl;
-			for(int s=0;s<8+(8*times);s++){
-				if(s==0){
-					if(arr[times][s]!= -1){ //bottom-left corner
-						map.neighbors(arr[times][s],tempA); // 8-neighborhood of arr[s]}
-						arr[times+1][s+z]= tempA[z];
-						z++;
-						arr[times+1][s+z]= tempA[z];
-						arr[times+1][s+(15+(8*times))]= tempA[7];
-					}else{
-						arr[times+1][s+z]= -1;
-						z++;
-						arr[times+1][s+z]= -1;
-						arr[times+1][s+(15+(8*times))]= -1;
+		for(int i=0;i<nPix;i++){
+				convolved_data[i]=0;
+		}
+		cout<<"max = "<< max<<endl;
+		float kernel_side = 11.0;
+
+         /*sigma = 5*/
+		/*float kernel[11][11]={{0.004411,	0.005278,	0.006068,	0.006704,	0.007117,	0.00726,	0.007117,	0.006704,	0.006068,	0.005278,	0.004411},
+							{0.005278,	0.006315,	0.00726,	0.008021,	0.008515,	0.008687,	0.008515,	0.008021,	0.00726,	0.006315,	0.005278},
+							{0.006068,	0.00726,	0.008347,	0.009222,	0.00979,	0.009988,	0.00979,	0.009222,	0.008347,	0.00726,	0.006068},
+							{0.006704,	0.008021,	0.009222,	0.010189,	0.010817,	0.011034,	0.010817,	0.010189,	0.009222,	0.008021,	0.006704},
+							{0.007117,	0.008515,	0.00979,	0.010817,	0.011483,	0.011714,	0.011483,	0.010817,	0.00979,	0.008515,	0.007117},
+							{0.00726,	0.008687,	0.009988,	0.011034,	0.011714,	0.01195,	0.011714,	0.011034,	0.009988,	0.008687,	0.00726},
+							{0.007117,	0.008515,	0.00979,	0.010817,	0.011483,	0.011714,	0.011483,	0.010817,	0.00979,	0.008515,	0.007117},
+							{0.006704,	0.008021,	0.009222,	0.010189,	0.010817,	0.011034,	0.010817,	0.010189,	0.009222,	0.008021,	0.006704},
+							{0.006068,	0.00726,	0.008347,	0.009222,	0.00979,	0.009988,	0.00979,	0.009222,	0.008347,	0.00726,	0.006068},
+							{0.005278,	0.006315,	0.00726,	0.008021,	0.008515,	0.008687,	0.008515,	0.008021,	0.00726,	0.006315,	0.005278},
+							{0.004411,	0.005278,	0.006068,	0.006704,	0.007117,	0.00726,	0.007117,	0.006704,	0.006068,	0.005278,	0.004411}
+							};*/
+
+
+		float kernel[11][11] = {{
+		0.000002,	0.00001,	0.000047,	0.000136,	0.000259,	0.00032,	0.000259,	0.000136,	0.000047,	0.00001,	0.000002},
+		{0.00001,	0.000072,	0.000322,	0.000939,	0.001785,	0.002212,	0.001785,	0.000939,	0.000322,	0.000072,	0.00001},
+		{.000047,	0.000322,	0.001443,	0.004212,	0.008008,	0.009921,	0.008008,	0.004212,	0.001443,	0.000322,	0.000047},
+		{0.000136,	0.000939,	0.004212,	0.012297,	0.02338,	0.028963,	0.02338,	0.012297,	0.004212,	0.000939,	0.000136},
+		{0.000259,	0.001785,	0.008008,	0.02338,	0.044453,	0.055067,	0.044453,	0.02338,	0.008008,	0.001785,	0.000259},
+		{0.00032,	0.002212,	0.009921,	0.028963,	0.055067,	0.068216,	0.055067,	0.028963,	0.009921,	0.002212,	0.00032},
+		{0.000259,	0.001785,	0.008008,	0.02338,	0.044453,	0.055067,	0.044453,	0.02338,	0.008008,	0.001785,	0.000259},
+		{0.000136,	0.000939,	0.004212,	0.012297,	0.02338,	0.028963,	0.02338,	0.012297,	0.004212,	0.000939,	0.000136},
+		{0.000047,	0.000322,	0.001443,	0.004212,	0.008008,	0.009921,	0.008008,	0.004212,	0.001443,	0.000322,	0.000047},
+		{0.00001,	0.000072,	0.000322,	0.000939,	0.001785,	0.002212,	0.001785,	0.000939,	0.000322,	0.000072,	0.00001},
+		{0.000002,	0.00001,	0.000047,	0.000136,	0.000259,	0.00032,	0.000259,	0.000136,	0.000047,	0.00001,	0.000002}
+		}; // kernel for sigma=1.5 e kernel_side=11
+		float kernel_reordered_Array[MAX_NEIGHBOORS][8*MAX_NEIGHBOORS];
+		int lim = (kernel_side/2.0)-1; //counts how many neighborhoods must be extracted
+		/*Reorder the kernel according to neighborhoods representation */
+		int centre = kernel_side/2.0;
+		float k_1 = kernel[centre][centre];
+		for(int times=0;times<lim;times++){
+			int i=0;
+			int count=0;
+			int cursor_row = centre+(1*times);
+			cout<<"cursor_row"<<cursor_row<<endl;
+
+			int cursor_column = centre-(times+1);
+			cout<<"cursor_column"<<cursor_column<<endl;
+
+			while(count<3+(2*times)){
+				cursor_row--;
+				kernel_reordered_Array[times][i]= kernel[cursor_row][cursor_column];
+				i++;
+				count++;
+			}
+			count=0;
+			while(count<2+(2*times)){
+				cursor_column++;
+				count++;
+				kernel_reordered_Array[times][i]= kernel[cursor_row][cursor_column];
+				i++;
+			}
+			count=0;
+			while(count<2+(2*times)){
+				cursor_row++;
+				count++;
+				kernel_reordered_Array[times][i]= kernel[cursor_row][cursor_column];
+				i++;
+			}
+			count=0;
+			while(count<1+(2*times)){
+				cursor_column--;
+				count++;
+				kernel_reordered_Array[times][i]= kernel[cursor_row][cursor_column];
+				i++;
+			}
+
+		}
+
+		/*Gaussian kernel for sigma = 1.5 side=11*/
+		/*TODO : optimal kernel size for sigma=1.5 is 11=> enlarge the side for better approssimation of Gaussian Beam*/
+		/*float k_1= 	0.068552; // central value of the kernel matrix
+		float kernel_reordered[8]={0.044672,0.055338,0.044672,0.055338,0.044672,0.055338,0.044672,0.055338};
+		float kernel_reordered_2[16]={0.012358,	0.023496,0.029106,0.023496,0.012358,0.023496,0.029106,0.023496,0.012358,0.023496,0.029106,0.023496,0.012358,0.023496,0.029106,0.023496};
+		float kernel_reordered_3[24]={0.00145,0.004233,0.008048,0.00997,0.008048,0.004233,0.00145,0.004233,0.008048,0.00997,0.008048,0.004233,0.00145,0.004233,0.008048,0.00997,0.008048,0.004233,0.00145,0.004233,0.008048,0.00997,0.008048,0.004233};
+		float kernel_reordered_4[32]={0.000072,0.000323,0.000944,0.001794,0.002222,0.001794,0.000944,0.000323,0.000072,0.000323,0.000944,0.001794,0.002222,0.001794,0.000944,0.000323,0.,.000323,0.000944,0.001794,0.002222,0.001794,0.000944,0.000323,0.000072,0.000323,0.000944,0.001794,0.002222,0.001794,0.000944,0.000323};
+		float kernel_reordered_5[40]={0.000002,0.00001,0.000047,0.000136,0.000259,0.00032,0.000259,0.000136,0.000047,0.00001,0.000002,0.00001,0.000047,0.000136,0.000259,0.00032,0.000259,0.000136,0.000047,0.00001,0.000002,0.00001,0.000047,0.000136,0.000259,0.00032,0.000259,0.000136,0.000047,0.00001,0.000002,0.00001,0.000047,0.000136,0.000259,0.00032,0.000259,0.000136,0.000047,0.00001};
+		/*float kernel_reordered2[24]={};*/
+		/*float* kernel_reordered_Array[5];
+		kernel_reordered_Array[0]=kernel_reordered;
+		kernel_reordered_Array[1]=kernel_reordered_2;
+		kernel_reordered_Array[2]=kernel_reordered_3;
+		kernel_reordered_Array[3]=kernel_reordered_4;
+		kernel_reordered_Array[4]=kernel_reordered_5;*/
+
+
+		fix_arr<int,81> arr[MAX_NEIGHBOORS]; // array for holding the (i+1)-neighborood
+		fix_arr<int,8> tempA; //holds temporary neighbors
+		int temp; // accumulator for convolution sums
+		for(int i=0;i<nPix;i++){
+			temp=0;
+			temp +=data[i]*k_1;
+			map.neighbors(i,tempA);//extract the 8-neighborood of the i-th pixel
+			for(int j=0;j<8;j++){
+				arr[0][j]=tempA[j];
+			}
+			int z = 0; //used to select neighbors
+			int separator; //indexing dividing arr[times][s] to reflect sides of neighborhood matrix
+
+			/* if necessary extract the other neighbors */
+			for(int times=0;times<lim;times++){ //if kernel side is 3 there is no need to extract other neighbors
+				separator = 2*(times+1);
+				for(int s=0;s<8+(8*times);s++){
+					if(s==0){//bottom-left corner
+						if(arr[times][s]!= -1){
+							map.neighbors(arr[times][s],tempA); // 8-neighborhood of arr[s]}
+							arr[times+1][s+z]= tempA[z];
+							z++;
+							arr[times+1][s+z]= tempA[z];
+							arr[times+1][s+(15+(8*times))]= tempA[7]; // last neighbor pixel
+						}else{ //if arr[times][s] does not exit also his neighbor does not exist
+							arr[times+1][s+z]= -1;
+							z++;
+							arr[times+1][s+z]= -1;
+							arr[times+1][s+(15+(8*times))]= -1;
+						}
+					}else if((s!=0) && (s<separator)){//left side
+						if(arr[times][s]!=-1){
+							map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
+							arr[times+1][s+1]=tempA[z];
+						}else{
+							arr[times+1][s+1]=-1;
+						}
+					}else if(s==separator){ // top-left corner
+						if(arr[times][s]!=-1){
+							map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
+							arr[times+1][s+z]= tempA[z];
+							z++;
+							arr[times+1][s+z]= tempA[z];
+							z++;
+							arr[times+1][s+z]= tempA[z];
+						}else{
+							arr[times+1][s+z]= -1;
+							z++;
+							arr[times+1][s+z]= -1;
+							z++;
+							arr[times+1][s+z]= -1;
+						}
+					}else if((s>separator)&& (s<separator*2)){//up-side
+						if(arr[times][s]!=0-1){
+							map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
+							arr[times+1][s+3]=tempA[z];
+						}else{
+							arr[times+1][s+(times+1)]=-1;
+						}
+					}else if(s==separator*2){ // top-right corner
+						if(arr[times][s]!=-1){
+							map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
+							arr[times+1][s+z]= tempA[z];
+							z++;
+							arr[times+1][s+z]= tempA[z];
+							z++;
+							arr[times+1][s+z]= tempA[z];
+						}else{
+							arr[times+1][s+z]= -1;
+							z++;
+							arr[times+1][s+z]= -1;
+							z++;
+							arr[times+1][s+z]= -1;
+						}
+					}else if((s>separator*2)&& (s<separator*3)){// right side
+						if(arr[times][s]!=-1){
+							map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
+							arr[times+1][s+5]=tempA[z];
+						}else{
+							arr[times+1][s+5]=-1;
+						}
+					}else if(s==separator*3){ //bottom-right corner
+						if(arr[times][s]!=-1){
+							map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
+							arr[times+1][s+z]= tempA[z];
+							z++;
+							arr[times+1][s+z]= tempA[z];
+							z++;//z=7
+							arr[times+1][s+z]= tempA[z];
+						}else{
+							map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
+							arr[times+1][s+z]= -1;
+							z++;
+							arr[times+1][s+z]= -1;
+							z++;//z=7
+							arr[times+1][s+z]= -1;
+						}
+					}else if((s>separator*3)&& (s<separator*4)){ // bottom side
+						if(arr[times][s]!=-1){
+							map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
+							arr[times+1][s+7]=tempA[z];
+						}else{
+							arr[times+1][s+7]=-1;
+						}
 					}
-				}else if((s!=0) && (s<separator)){//left side
-					if(arr[times][s]!=0){
-						map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
-						arr[times+1][s+1]=tempA[z];
-					}else{
-						arr[times+1][s+1]=-1;
-					}
-				}else if(s==separator){ // top-left corner
-					if(arr[times][s]!=0){
-						map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
-						arr[times+1][s+z]= tempA[z];
-						z++;
-						arr[times+1][s+z]= tempA[z];
-						z++;
-						arr[times+1][s+z]= tempA[z];
-					}else{
-						arr[times+1][s+z]= -1;
-						z++;
-						arr[times+1][s+z]= -1;
-						z++;
-						arr[times+1][s+z]= -1;
-					}
-				}else if((s>separator)&& (s<separator*2)){//up-side
-					if(arr[times][s]!=0){
-						map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
-						arr[times+1][s+3]=tempA[z];
-					}else{
-						arr[times+1][s+(times+1)]=-1;
-					}
-				}else if(s==separator*2){ // top-right corner
-					if(arr[times][s]!=0){
-						map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
-						arr[times+1][s+z]= tempA[z];
-						z++;
-						arr[times+1][s+z]= tempA[z];
-						z++;
-						arr[times+1][s+z]= tempA[z];
-					}else{
-						arr[times+1][s+z]= -1;
-						z++;
-						arr[times+1][s+z]= -1;
-						z++;
-						arr[times+1][s+z]= -1;
-					}
-				}else if((s>separator*2)&& (s<separator*3)){// right side
-					if(arr[times][s]!=0){
-						map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
-						arr[times+1][s+5]=tempA[z];
-					}else{
-						arr[times+1][s+5]=-1;
-					}
-				}else if(s==separator*3){ //bottom-right corner
-					if(arr[times][s]!=0){
-						map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
-						arr[times+1][s+z]= tempA[z];
-						z++;
-						arr[times+1][s+z]= tempA[z];
-						z++;//z=7
-						arr[times+1][s+z]= tempA[z];
-					}else{
-						map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
-						arr[times+1][s+z]= -1;
-						z++;
-						arr[times+1][s+z]= -1;
-						z++;//z=7
-						arr[times+1][s+z]= -1;
-					}
-				}else if((s>separator*3)&& (s<separator*4)){ // bottom side
-					if(arr[times][s]!=0){
-						map.neighbors(arr[times][s],tempA); // 8-neighborood of arr[s]
-						arr[times+1][s+7]=tempA[z];
-					}else{
-						arr[times+1][s+7]=-1;
+				}
+				z=0;
+			}
+			/*Finally calculates the convolution sum */
+			for(int q=0;q<lim+1;q++){
+				for(int k=0;k<8*(q+1);k++){
+					if(arr[0][k]!=-1){
+						temp += data[arr[q][k]]*kernel_reordered_Array[q][(k+4*(q+1))%(8*(q+1))];
 					}
 				}
 			}
-			z=0;
+			convolved_data[i] = temp;
 		}
-
-		for(int k=0;k<8;k++){
-			if(arr[0][k]!=-1){
-				temp += data[arr[0][k]]*kernel_reordered[(k+4)%8];
-			}
-		}
-		for(int k=0;k<16;k++){
-			if(arr[1][k]!=-1){
-				temp += data[arr[1][k]]*kernel_reordered_2[(k+8)%16];
-			}
-		}
-
-		for(int k=0;k<24;k++){
-			if(arr[2][k]!=-1){
-				temp += data[arr[2][k]]*kernel_reordered_3[(k+12)%24];
-			}
-
-		}
-		for(int k=0;k<32;k++){
-			if(arr[3][k]!=-1){
-				temp += data[arr[3][k]]*kernel_reordered_4[(k+16)%32];
-			}
-		}
-		convolved_data[i] = temp;
 	}
+
+	/*thresholding*/
+
+	/*first create the histogram*/
+	int histogram[255];
+	for(int i=0;i<256;i++){
+		histogram[i]=0;;
+	}
+	for(int i=0;i<nPix;i++){
+		histogram[(int)convolved_data[i]]++;
+	}
+	float mass_prob;
+
+	float percent_acc = 0;
+	int index=-1;
+	float treshold = -1;
+	cout<<"nPix "<<nPix<<endl;
+	 /* calcolate the treshold as 99% of all pixels*/
+	for(int i=0;i<256;i++){
+			cout<<"histogram[i]= "<<histogram[i]<<endl;
+		mass_prob= (float)histogram[i]/(float)nPix;
+
+		percent_acc+=mass_prob;
+		cout<<"percent_acc= "<<percent_acc<<endl;
+		if(percent_acc>=0.998){
+			treshold= i;
+			break;
+		}
+	}
+	cout<<"treshold= "<<treshold<<endl;
+
+	for(int i=0;i<nPix;i++){
+		if(convolved_data[i]<=treshold){
+			convolved_data[i]=0;
+		}else{
+			convolved_data[i]=255;
+		}
+	}
+
 	for(int i=0;i<nPix;i++){
 		convolved_map[i]= convolved_data[i] ;
 	}
 
+	if(saveMaps){
+		fitshandle handle = fitshandle() ;
+		handle.create("./healpix_map.FITS");
+		write_Healpix_map_to_fits(handle,map,PLANCK_INT64);
 
-
-
-	fitshandle handle = fitshandle() ;
-	handle.create("./healpix_map.FITS");
-	write_Healpix_map_to_fits(handle,map,PLANCK_INT64);
-
-	fitshandle handleC = fitshandle() ;
-	handleC.create("./convolved_healpix_map.FITS");
-	write_Healpix_map_to_fits(handleC,convolved_map,PLANCK_INT64);
-   /* if (saveMaps) {
-        vector<unsigned short> sum;
-        sum.resize(npixels);
-        for (unsigned int i=0; i<mxdim; i++)
-            for (unsigned int j=0; j<mxdim; j++)
-                sum[i*mxdim+j] = 0;
-        for (int intvIndex=0; intvIndex<intervals.Count(); intvIndex++)
-            for (unsigned int i=0; i<mxdim; i++)
-                for (unsigned int j=0; j<mxdim; j++)
-                    sum[i*mxdim+j] += counts[intvIndex][i*mxdim+j];
-
-        int bitpix = USHORT_IMG;
-        long naxis = 2;
-        long naxes[2] = { mxdim, mxdim };
-        fitsfile * mapFits;
-        cout << "Creating file " << outfile << endl;
-        if (fits_create_file(&mapFits, outfile, &status) != 0) {
-            cerr << "Error opening file " << outfile << endl;
-            return status;
-        }
-        cout << "creating Counts Map...................................." << endl;
-        fits_create_img(mapFits, bitpix, naxis, naxes, &status);
-        cout << "writing Counts Map with " << totalCounts << " events" << endl;
-        fits_write_img(mapFits, bitpix, 1, npixels, &sum[0], &status);
-        cout << "writing header........................................" << endl << endl;
-        fits_update_key(mapFits, TDOUBLE, "CRVAL1", &la, NULL, &status);
-        fits_update_key(mapFits, TDOUBLE, "CRVAL2", &ba, NULL, &status);
-        char projstr1[FLEN_FILENAME];
-        char projstr2[FLEN_FILENAME];
-        if (proj == AIT) {
-            strcpy(projstr1,"GLON-AIT");
-            strcpy(projstr2,"GLAT-AIT");
-        } else {
-            strcpy(projstr1,"GLON-ARC");
-            strcpy(projstr2,"GLAT-ARC");
-        }
-        fits_update_key(mapFits, TSTRING, "CTYPE1", projstr1, NULL, &status);
-        fits_update_key(mapFits, TSTRING, "CTYPE2", projstr2, NULL, &status);
-        double xx = mdim/mres/2+0.5;
-        fits_update_key(mapFits, TDOUBLE, "CRPIX1", &xx, NULL, &status);
-        fits_update_key(mapFits, TDOUBLE, "CRPIX2", &xx, NULL, &status);
-        xx = -mres;
-        fits_update_key(mapFits, TDOUBLE, "CDELT1", &xx, NULL, &status);
-        xx = mres;
-        fits_update_key(mapFits, TDOUBLE, "CDELT2", &xx, NULL, &status);
-        char unit[] = "deg";
-        fits_update_key(mapFits, TSTRING, "CUNIT1", unit, NULL, &status);
-        fits_update_key(mapFits, TSTRING, "CUNIT2", unit, NULL, &status);
-        char str3[] = "FK5";
-        fits_update_key(mapFits, TSTRING,  "RADESYS", str3, NULL, &status);
-        xx = 2000.0;
-        fits_update_key(mapFits, TDOUBLE,  "EQUINOX", &xx, NULL, &status);
-        fits_update_key(mapFits, TDOUBLE,  "LONPOLE", &lonpole, NULL, &status);
-        WriteTime(mapFits, tmin, tmax);
-        fits_update_key(mapFits, TDOUBLE,  "MINENG", &emin, NULL, &status);
-        fits_update_key(mapFits, TDOUBLE,  "MAXENG", &emax, NULL, &status);
-        char str1[] = "AGILE";
-        fits_update_key(mapFits, TSTRING,  "TELESCOP", str1, NULL, &status);
-        char str2[] = "GRID";
-        fits_update_key(mapFits, TSTRING,  "INSTRUME", str2, NULL, &status);
-        char str6[] = "T";
-        fits_update_key(mapFits, TSTRING,  "PIXCENT", str6, NULL, &status);
-        char str7[FLEN_FILENAME] = "";
-        fits_update_key(mapFits, TSTRING,  "BUNIT", str7, NULL, &status);
-        fits_update_key(mapFits, TDOUBLE,  "FOV", &fovradmax, "Maximum off-axis angle (deg)", &status);
-        fits_update_key(mapFits, TDOUBLE,  "FOVMIN", &fovradmin, "Minimum off-axis angle (deg)", &status);
-        fits_update_key(mapFits, TDOUBLE,  "ALBEDO", &albrad, "Earth zenith angle (deg)", &status);
-        fits_update_key(mapFits, TINT,  "PHASECOD", &phasecode, "Orbital phase code", &status);
-        fits_update_key(mapFits, TINT,  "FILTERCO", &filtercode, "Event filter code", &status);
-        cout << "Closing " << outfile << endl;
-        fits_close_file(mapFits, &status);
-    }*/
-    fits_close_file(selectionFits, &status);
-    fits_close_file(templateFits, &status);
+		fitshandle handleC = fitshandle() ;
+		handleC.create("./convolved_&_thresholded_healpix_map.FITS");
+		write_Healpix_map_to_fits(handleC,convolved_map,PLANCK_INT64);
+		fits_close_file(selectionFits, &status);
+		fits_close_file(templateFits, &status);
+    }
 
     return status;
 }
-

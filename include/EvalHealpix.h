@@ -11,6 +11,6 @@ int EvalCountsHealpix(const char *outfile, double mres, double tmin,
                double fovradmin, double albrad, int phasecode, int filtercode,
                const char *selectionFilename,  const char *templateFilename,
                Intervals &intervals, std::vector< std::vector<int> > &counts,
-               bool saveMaps);
+               bool saveMaps,bool smooth, bool binarize);
 
 void convolution(const cv::Mat & input, cv::Mat & output, std::vector<float> & kernel, int kernel_side);

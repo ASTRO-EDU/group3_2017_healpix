@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
                        params["emin"], params["emax"], params["fovradmax"],
                        params["fovradmin"], params["albrad"], params["phasecode"],
                        params["filtercode"], selectionFilename, templateFilename,
-                       intervals, counts, true);
+                       intervals, counts, true,true,true);
     FitsFile sfile(selectionFilename);
     sfile.Delete();
     FitsFile tfile(templateFilename);
