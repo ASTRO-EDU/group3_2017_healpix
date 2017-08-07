@@ -95,7 +95,6 @@ int main(int argc, char *argv[])
     //fovradmax=60
     //phasecode=6
     //filtercode=0 (tutto) o 5 (solo fotoni gamma)
-    cout<<"asda"<<endl;
     string evtExpr = selection::EvtExprString(intervals, params["emin"], params["emax"],
                                     params["albrad"], params["fovradmax"], params["fovradmin"],
                                     params["phasecode"], params["filtercode"]);
@@ -113,13 +112,18 @@ int main(int argc, char *argv[])
     vector< vector<int> > counts;
     //outfile nome del file di output
 
-    status = EvalCountsHealpix(params["outfile"],params["mres"], params["tmin"],
+	/* use this to make the healpix map*/
+    /*status = EvalCountsHealpix(params["outfile"],params["mres"], params["tmin"],
                        params["tmax"], params["mdim"],
                        params["la"], params["ba"], params["lonpole"],
                        params["emin"], params["emax"], params["fovradmax"],
                        params["fovradmin"], params["albrad"], params["phasecode"],
                        params["filtercode"], selectionFilename, templateFilename,
-                       intervals, counts, true,true,true);
+                       intervals, counts, true);*/
+
+    /* use this to smooth and threshold an healpix map*/
+
+     status = SmoothAndThresh(params["mres"], true,99);
     FitsFile sfile(selectionFilename);
     sfile.Delete();
     FitsFile tfile(templateFilename);
